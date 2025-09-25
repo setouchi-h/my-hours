@@ -1,103 +1,234 @@
-import Image from "next/image";
+"use client"
+
+import { Plus, Trash2 } from "lucide-react"
+import { useMemo, useState } from "react"
+
+import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Separator } from "@/components/ui/separator"
+
+type TimeSlot = {
+  id: number
+  start: string
+  end: string
+}
+
+const toTodayInputValue = () => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, "0")
+  const day = String(now.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+const createTimeSlot = (id: number): TimeSlot => ({
+  id,
+  start: "",
+  end: "",
+})
+
+const parseTime = (value: string) => {
+  if (!value) return null
+  const [hours, minutes] = value.split(":").map(Number)
+  if (
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null
+  }
+  return hours * 60 + minutes
+}
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [selectedDate, setSelectedDate] = useState(toTodayInputValue())
+  const [slots, setSlots] = useState<TimeSlot[]>([createTimeSlot(0)])
+  const [nextId, setNextId] = useState(1)
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
+  const { totalMinutes, invalidRanges } = useMemo(() => {
+    const invalid: number[] = []
+    const total = slots.reduce((sum, { start, end }, index) => {
+      const startMinutes = parseTime(start)
+      const endMinutes = parseTime(end)
+
+      if (startMinutes === null || endMinutes === null) {
+        return sum
+      }
+
+      if (endMinutes <= startMinutes) {
+        invalid.push(index)
+        return sum
+      }
+
+      return sum + (endMinutes - startMinutes)
+    }, 0)
+
+    return { totalMinutes: total, invalidRanges: invalid }
+  }, [slots])
+
+  const totalHours = Math.floor(totalMinutes / 60)
+  const totalRemainderMinutes = totalMinutes % 60
+  const totalLabel = totalMinutes
+    ? `${totalHours}時間${String(totalRemainderMinutes).padStart(2, "0")}分`
+    : "--"
+
+  const updateSlot = (
+    id: number,
+    field: keyof Omit<TimeSlot, "id">,
+    value: string,
+  ) => {
+    setSlots((prev) =>
+      prev.map((slot) => (slot.id === id ? { ...slot, [field]: value } : slot)),
+    )
+  }
+
+  const addSlot = () => {
+    setSlots((prev) => [...prev, createTimeSlot(nextId)])
+    setNextId((prev) => prev + 1)
+  }
+
+  const removeSlot = (id: number) => {
+    setSlots((prev) => (prev.length > 1 ? prev.filter((slot) => slot.id !== id) : prev))
+  }
+
+  return (
+    <div className="min-h-screen bg-muted/30">
+      <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-6 py-10">
+        <header className="space-y-3">
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+            勤務時間トラッカー
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            24時間表記で開始・終了時刻を入力すると、合計勤務時間を自動計算します。
+          </p>
+        </header>
+
+        <Card>
+          <CardHeader className="gap-1">
+            <CardTitle>勤務時間を入力</CardTitle>
+            <CardDescription>
+              日付と時間帯を入力すると、中抜けがあっても自動で合計時間を計算します。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="work-date">日付</Label>
+              <Input
+                id="work-date"
+                type="date"
+                value={selectedDate}
+                onChange={(event) => setSelectedDate(event.target.value)}
+              />
+            </div>
+
+            <Separator />
+
+            <div className="space-y-4">
+              {slots.map((slot, index) => {
+                const startId = `slot-${slot.id}-start`
+                const endId = `slot-${slot.id}-end`
+                const showError = invalidRanges.includes(index)
+
+                return (
+                  <div
+                    key={slot.id}
+                    className="space-y-3 rounded-lg border border-dashed border-border/70 p-4"
+                  >
+                    <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
+                      <div className="space-y-2">
+                        <Label htmlFor={startId}>開始時刻</Label>
+                        <Input
+                          id={startId}
+                          type="time"
+                          inputMode="numeric"
+                          value={slot.start}
+                          onChange={(event) =>
+                            updateSlot(slot.id, "start", event.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={endId}>終了時刻</Label>
+                        <Input
+                          id={endId}
+                          type="time"
+                          inputMode="numeric"
+                          value={slot.end}
+                          onChange={(event) =>
+                            updateSlot(slot.id, "end", event.target.value)
+                          }
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="md:justify-self-end"
+                        onClick={() => removeSlot(slot.id)}
+                        disabled={slots.length === 1}
+                        aria-label={`時間帯${index + 1}を削除`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {showError && (
+                      <p className="text-xs text-destructive">
+                        終了時刻は開始時刻より後に設定してください。
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <p className="text-xs text-muted-foreground">
+              中抜けがある場合は時間帯を追加して入力してください。
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={addSlot}
+              className="w-full md:w-auto"
+            >
+              <Plus className="mr-2 h-4 w-4" /> 時間帯を追加
+            </Button>
+          </CardFooter>
+        </Card>
+
+        <Card>
+          <CardHeader className="gap-1">
+            <CardTitle>{selectedDate || "日付未選択"}</CardTitle>
+            <CardDescription>
+              入力済みの時間帯の合計勤務時間を確認できます。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-muted-foreground">合計勤務時間</span>
+              <span className="text-3xl font-semibold tracking-tight text-foreground">
+                {totalLabel}
+              </span>
+            </div>
+            <Separator />
+            <p className="text-xs text-muted-foreground">
+              時刻をすべて入力すると合計が表示されます。終了時刻が開始時刻よりも前の場合は赤字で警告が表示されます。
+            </p>
+          </CardContent>
+        </Card>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
-  );
+  )
 }
